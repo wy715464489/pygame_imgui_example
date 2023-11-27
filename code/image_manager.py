@@ -1,5 +1,5 @@
 import json
-
+import os
 
 class ImageManager:
     def __init__(self):
@@ -12,6 +12,17 @@ class ImageManager:
         # 从文件加载字典
         with open(self.cfg_json, 'r') as f:
             self.images = json.load(f)
+        # make sure image path exists
+        to_remove = []
+        for name, path in self.images.items():
+            if not os.path.exists(path):
+                to_remove.append(name)
+
+        for name in to_remove:
+            self.images.pop(name)
+        if len(to_remove) > 0:
+            self.save_images_to_json()
+
 
     def add_image(self, name, image):
         self.images[name] = image
