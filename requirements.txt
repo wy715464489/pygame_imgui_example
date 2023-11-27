@@ -1,2 +1,3 @@
 imgui[pygame]
 numpy
+PyOpenGL-accelerate
