@@ -38,36 +38,39 @@ class UIManager:
         self.io = imgui.get_io()
         self.io.display_size = window_size
 
+    def shutdown(self):
+        self.renderer.shutdown()
+
     # 处理事件
     def process_event(self, event):
         self.io = imgui.get_io()
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                self.io.mouse_down[0] = True
-            elif event.button == 2:
-                self.io.mouse_down[1] = True
-            elif event.button == 3:
-                self.io.mouse_down[2] = True
-        elif event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1:
-                self.io.mouse_down[0] = False
-            elif event.button == 2:
-                self.io.mouse_down[1] = False
-            elif event.button == 3:
-                self.io.mouse_down[2] = False
-        elif event.type == pygame.MOUSEWHEEL:
-            self.io.mouse_wheel = event.y
-        elif event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
-            key, mapped_key = self.__map_key(event)
-            self.io.keys_down[mapped_key] = event.type == pygame.KEYDOWN
-            self.io.key_shift = event.mod & pygame.KMOD_SHIFT
-            self.io.key_ctrl = event.mod & pygame.KMOD_CTRL
-            self.io.key_alt = event.mod & pygame.KMOD_ALT
-            self.io.key_super = event.mod & pygame.KMOD_META
-        elif event.type == pygame.TEXTINPUT:
-            self.io.add_input_characters(event.text)
-        elif event.type == pygame.QUIT:
-            self.io.want_quit = True
+        # if event.type == pygame.MOUSEBUTTONDOWN:
+        #     if event.button == 1:
+        #         self.io.mouse_down[0] = True
+        #     elif event.button == 2:
+        #         self.io.mouse_down[1] = True
+        #     elif event.button == 3:
+        #         self.io.mouse_down[2] = True
+        # elif event.type == pygame.MOUSEBUTTONUP:
+        #     if event.button == 1:
+        #         self.io.mouse_down[0] = False
+        #     elif event.button == 2:
+        #         self.io.mouse_down[1] = False
+        #     elif event.button == 3:
+        #         self.io.mouse_down[2] = False
+        # elif event.type == pygame.MOUSEWHEEL:
+        #     self.io.mouse_wheel = event.y
+        # elif event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
+        #     key, mapped_key = self.__map_key(event)
+        #     self.io.keys_down[mapped_key] = event.type == pygame.KEYDOWN
+        #     self.io.key_shift = event.mod & pygame.KMOD_SHIFT
+        #     self.io.key_ctrl = event.mod & pygame.KMOD_CTRL
+        #     self.io.key_alt = event.mod & pygame.KMOD_ALT
+        #     self.io.key_super = event.mod & pygame.KMOD_META
+        # elif event.type == pygame.TEXTINPUT:
+        #     self.io.add_input_characters(event.text)
+        # elif event.type == pygame.QUIT:
+        #     self.io.want_quit = True
         self.renderer.process_event(event)
 
     # 主循环

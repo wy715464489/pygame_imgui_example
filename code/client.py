@@ -42,5 +42,5 @@ class Client:
             pygame.display.flip()
 
         # 清理资源
-        self.renderer.shutdown()
+        self.ui_manager.shutdown()
         pygame.quit()
