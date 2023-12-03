@@ -54,20 +54,20 @@ class UIManager:
     # 处理事件
     def process_event(self, event):
         self.io = imgui.get_io()
-        # if event.type == pygame.MOUSEBUTTONDOWN:
-        #     if event.button == 1:
-        #         self.io.mouse_down[0] = True
-        #     elif event.button == 2:
-        #         self.io.mouse_down[1] = True
-        #     elif event.button == 3:
-        #         self.io.mouse_down[2] = True
-        # elif event.type == pygame.MOUSEBUTTONUP:
-        #     if event.button == 1:
-        #         self.io.mouse_down[0] = False
-        #     elif event.button == 2:
-        #         self.io.mouse_down[1] = False
-        #     elif event.button == 3:
-        #         self.io.mouse_down[2] = False
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                self.io.mouse_down[0] = True
+            elif event.button == 2:
+                self.io.mouse_down[1] = True
+            elif event.button == 3:
+                self.io.mouse_down[2] = True
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                self.io.mouse_down[0] = False
+            elif event.button == 2:
+                self.io.mouse_down[1] = False
+            elif event.button == 3:
+                self.io.mouse_down[2] = False
         # elif event.type == pygame.MOUSEWHEEL:
         #     self.io.mouse_wheel = event.y
         # elif event.type == pygame.KEYDOWN or event.type == pygame.KEYUP:
@@ -83,8 +83,29 @@ class UIManager:
         #     self.io.want_quit = True
         self.renderer.process_event(event)
 
+    #处理输入事件
+    def __input_event(self):
+        # 处理鼠标事件
+        if self.io.mouse_down[0]:
+            # 打印鼠标位置
+            # print(self.io.mouse_pos)
+            # 当前是否有图片被选中
+            if self.selected_image != -1 and self.show_edge_points is not None:
+                # 是否点击到了图片边缘的点
+                for i in range(len(self.show_edge_points)):
+                    # 计算鼠标位置与点的距离
+                    distance_sqr = ((self.io.mouse_pos[0] - self.show_edge_points[i][0]) ** 2 + (self.io.mouse_pos[1] - self.show_edge_points[i][1]) ** 2)
+                    if distance_sqr < 64:
+                        # 拖动点
+                        self.show_edge_points[i][0] = self.io.mouse_pos[0]
+                        self.show_edge_points[i][1] = self.io.mouse_pos[1]
+                        # 计算image_edge_points
+                        self.__calc_image_edge()
+                        break
+
     # 主循环
     def update(self):
+        self.__input_event()
         # 开始imgui框架
         imgui.new_frame()
 
@@ -102,11 +123,12 @@ class UIManager:
                 # image edge detection
                 edge_points = self.__edge_detection(path, 1)
                 if edge_points is not None:
-                    self.image_edge_points = edge_points
+                    # edge_points copy to self.image_edge_points
+                    self.image_edge_points = edge_points.copy()
                     # add cur imgui window pos
                     offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
                     offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
-                    for i in range(4):
+                    for i in range(len(edge_points)):
                         # scale to image window size
                         edge_points[i][0] /= self.imageWndScale.x
                         edge_points[i][1] /= self.imageWndScale.y
@@ -171,11 +193,30 @@ class UIManager:
         if self.show_edge_points is None:
             return
         
-        for i in range(4):
+        for i in range(len(self.show_edge_points)):
             imgui.get_window_draw_list().add_line(
                 self.show_edge_points[i][0], self.show_edge_points[i][1],
                 self.show_edge_points[(i + 1) % 4][0], self.show_edge_points[(i + 1) % 4][1],
                 imgui.get_color_u32_rgba(255, 0, 0, 255), 2.0)
+            # 显示可调节的空心圆
+            imgui.get_window_draw_list().add_circle(
+                self.show_edge_points[i][0], self.show_edge_points[i][1],
+                5, imgui.get_color_u32_rgba(255, 0, 0, 255), 12, 2.0)
+            
+    def __calc_image_edge(self):
+        #根据show_edge_points 计算 image_edge_points
+        offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
+        offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
+        for i in range(len(self.show_edge_points)):
+            # remove wnd border
+            self.image_edge_points[i][0] = self.show_edge_points[i][0] - offsetX
+            self.image_edge_points[i][1] = self.show_edge_points[i][1] - offsetY
+            # offset
+            self.image_edge_points[i][0] -= self.imageWndPos.x
+            self.image_edge_points[i][1] -= self.imageWndPos.y
+            # scale
+            self.image_edge_points[i][0] *= self.imageWndScale.x
+            self.image_edge_points[i][1] *= self.imageWndScale.y
 
     def __show_image(self, texId):
         # set position
