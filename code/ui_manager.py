@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import filedialog
 import pygame
 from texture_manager import TextureMgr as texmgr
+import cv2
 
 def open_file_dialog(text, file_types):
     root = tk.Tk()
@@ -37,6 +38,15 @@ class UIManager:
         # 设置imgui的DisplaySize
         self.io = imgui.get_io()
         self.io.display_size = window_size
+        self.texture = None
+        self.show_edge_points = None
+        self.image_edge_points = None
+        self.imageWndPos = imgui.Vec2(280, self.io.display_size.y * 0.15)
+        self.imageWndSize = imgui.Vec2(620, 620)
+        self.innerImageWndSize = imgui.Vec2(self.imageWndSize.x - 20, self.imageWndSize.y - 20)
+        # 显示的imgui image windows size 与 原始图片的比例
+        self.imageWndScale = imgui.Vec2(1.0,1.0)
+        
 
     def shutdown(self):
         self.renderer.shutdown()
@@ -83,43 +93,102 @@ class UIManager:
         # 显示选中的图片
         if self.selected_image != -1:
             images = list(self.image_manager.get_images().items())
-            name, path = images[self.selected_image]
-            texId = texmgr.get_instance().create_get_texture(path)
-            self.__show_image(texId)
-
-        
-            # imgui.text(name)
-            # imgui.image_button(
-            #     self.renderer.get_texture(path), 200, 200, border_color=(0, 0, 0, 0))
+            _, path = images[self.selected_image]
+            texture = texmgr.get_instance().create_get_texture(path)
+            self.__show_image(texture.gl_tex_id)
+            if (self.texture == None or self.texture.gl_tex_id != texture.gl_tex_id):
+                self.texture = texture
+                self.imageWndScale = imgui.Vec2(self.texture.width / self.innerImageWndSize.x, self.texture.height / self.innerImageWndSize.y)
+                # image edge detection
+                edge_points = self.__edge_detection(path, 1)
+                if edge_points is not None:
+                    self.image_edge_points = edge_points
+                    # add cur imgui window pos
+                    offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
+                    offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
+                    for i in range(4):
+                        # scale to image window size
+                        edge_points[i][0] /= self.imageWndScale.x
+                        edge_points[i][1] /= self.imageWndScale.y
+                        edge_points[i][0] += self.imageWndPos.x
+                        edge_points[i][1] += self.imageWndPos.y
+                        # add wnd border
+                        edge_points[i][0] += offsetX
+                        edge_points[i][1] += offsetY
+                    self.show_edge_points = edge_points
+                else:
+                    self.image_edge_points = None
+                    self.show_edge_points = None
 
         # 结束imgui窗口
         imgui.end()
-
-        # # set position
-        # imageWndPos = imgui.Vec2(280, self.io.display_size.y * 0.15)
-        # imageWndSize = imgui.Vec2(200, 200)
-        # imgui.set_next_window_position(imageWndPos.x, imageWndPos.y)
-        # imgui.set_next_window_size(imageWndSize.x, imageWndSize.y)
-        
-        # imgui.image_button(self.textures[name],
-        #                     200, 200, border_color=(0, 0, 0, 0))
         imgui.render()
         draw_data = imgui.get_draw_data()
         if draw_data is not None:
             self.renderer.render(imgui.get_draw_data())
+    
+    # 返回四个点的坐标,expand为扩大的像素
+    def __edge_detection(self, path:str, expand:int):
+        # use opencv to detect edge
+        img = cv2.imread(path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        canny = cv2.Canny(blur, 50, 150)
+
+        # 寻找轮廓，只寻找外轮廓
+        contours, _ = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:5]
+
+        # 寻找边缘的四个点
+        for c in contours:
+            # 计算轮廓近似
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
+            if len(approx) == 4:
+                points = approx.reshape(4, 2)
+                # reverse y
+                points[:, 1] = img.shape[0] - points[:, 1]
+                # 计算四边形的中心点
+                center_x = sum(point[0] for point in points) / 4
+                center_y = sum(point[1] for point in points) / 4
+
+                # 将每个点向四边形的外部移动
+                for point in points:
+                    direction_x = point[0] - center_x
+                    direction_y = point[1] - center_y
+                    length = (direction_x ** 2 + direction_y ** 2) ** 0.5
+                    direction_x /= length
+                    direction_y /= length
+                    point[0] += direction_x * expand
+                    point[1] += direction_y * expand
+
+
+                return points
+        return None
+
+    def __show_image_edge(self):
+        # show image edge
+        if self.show_edge_points is None:
+            return
+        
+        for i in range(4):
+            imgui.get_window_draw_list().add_line(
+                self.show_edge_points[i][0], self.show_edge_points[i][1],
+                self.show_edge_points[(i + 1) % 4][0], self.show_edge_points[(i + 1) % 4][1],
+                imgui.get_color_u32_rgba(255, 0, 0, 255), 2.0)
 
     def __show_image(self, texId):
-        
         # set position
-        imageWndPos = imgui.Vec2(280, self.io.display_size.y * 0.15)
-        imageWndSize = imgui.Vec2(420, 420)
-        imgui.set_next_window_position(imageWndPos.x, imageWndPos.y)
-        imgui.set_next_window_size(imageWndSize.x, imageWndSize.y)
+        
+        imgui.set_next_window_position(self.imageWndPos.x, self.imageWndPos.y)
+        imgui.set_next_window_size(self.imageWndSize.x, self.imageWndSize.y)
         imgui.set_next_window_bg_alpha(0.0)
 
         flags = imgui.WINDOW_NO_TITLE_BAR | imgui.WINDOW_NO_BACKGROUND | imgui.WINDOW_NO_RESIZE | imgui.WINDOW_NO_MOVE | imgui.WINDOW_NO_SCROLLBAR
         imgui.begin("图片", flags=flags)
-        imgui.image(texId, 400, 400)
+        imgui.image(texId, self.imageWndSize.x - 20, self.imageWndSize.y - 20, border_color=(1, 0, 1, 1))
+        self.__show_image_edge()
+
         imgui.end()
         
     def __show_image_list(self):

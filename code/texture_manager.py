@@ -2,13 +2,20 @@ from OpenGL.GL import *
 from path_util import PathUtils as pathutil
 import pygame
 
+class Texture:
+    def __init__(self, path, gl_tex_id, width, height):
+        self.path = path
+        self.gl_tex_id = gl_tex_id
+        self.width = width
+        self.height = height
+
 # singleton
 class TextureMgr:
     __instance = None
     def __init__(self):
         if TextureMgr.__instance is None:
             TextureMgr.__instance = self
-            # key is path of texture, value is texture id
+            # key is path of texture, value is Texture object
             self.textures = {}
         else:
             raise Exception("You cannot create another TextureMgr class")
@@ -28,8 +35,8 @@ class TextureMgr:
             return texture
 
     def create_texture(self, path):
-        texture = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, texture)
+        gl_tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, gl_tex_id)
         # texture wrapping params
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
@@ -43,14 +50,17 @@ class TextureMgr:
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
                      0, GL_RGBA, GL_UNSIGNED_BYTE, image)
         #glGenerateMipmap(GL_TEXTURE_2D)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        # create Texture object
+        texture = Texture(path, gl_tex_id, width, height)
         return texture
     
     def remove_texture(self, path):
         if path in self.textures:
-            glDeleteTextures(self.textures[path])
+            glDeleteTextures(self.textures[path].gl_tex_id)
             self.textures.pop(path)
 
     def destroy(self):
         for texture in self.textures.values():
-            glDeleteTextures(texture)
+            glDeleteTextures(texture.gl_tex_id)
         self.textures.clear()

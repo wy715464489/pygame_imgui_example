@@ -4,7 +4,7 @@ from imgui.integrations.pygame import PygameRenderer
 import OpenGL.GL as gl
 # 引入 client.py
 from client import Client
-window_size = (800, 600)
+window_size = (1920, 1080)
 title = "imgui and pygame Example"
 # 定义main函数
 
