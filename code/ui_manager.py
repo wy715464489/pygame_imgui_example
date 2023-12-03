@@ -1,7 +1,9 @@
+import math
 import imgui
 from imgui.integrations.pygame import PygameRenderer
 import OpenGL.GL as gl
 from OpenGL.GL import *
+import numpy as np
 import image_manager as imgmgr
 from path_util import PathUtils as pathutil
 import tkinter as tk
@@ -32,8 +34,6 @@ class UIManager:
         self.image_manager = image_manager
         self.renderer = self.renderer = PygameRenderer()
         self.selected_image = -1
-
-        self.textures = {}
 
         # 设置imgui的DisplaySize
         self.io = imgui.get_io()
@@ -90,18 +90,50 @@ class UIManager:
             # 打印鼠标位置
             # print(self.io.mouse_pos)
             # 当前是否有图片被选中
-            if self.selected_image != -1 and self.show_edge_points is not None:
-                # 是否点击到了图片边缘的点
-                for i in range(len(self.show_edge_points)):
-                    # 计算鼠标位置与点的距离
-                    distance_sqr = ((self.io.mouse_pos[0] - self.show_edge_points[i][0]) ** 2 + (self.io.mouse_pos[1] - self.show_edge_points[i][1]) ** 2)
-                    if distance_sqr < 64:
-                        # 拖动点
-                        self.show_edge_points[i][0] = self.io.mouse_pos[0]
-                        self.show_edge_points[i][1] = self.io.mouse_pos[1]
-                        # 计算image_edge_points
-                        self.__calc_image_edge()
-                        break
+            if self.selected_image != -1:
+                # 是否在图片窗口内
+                if self.io.mouse_pos[0] >= self.imageWndPos.x and self.io.mouse_pos[0] <= self.imageWndPos.x + self.imageWndSize.x and self.io.mouse_pos[1] >= self.imageWndPos.y and self.io.mouse_pos[1] <= self.imageWndPos.y + self.imageWndSize.y:
+                    # 是否点击到了图片边缘的点
+                    if self.show_edge_points is not None:
+                        for i in range(len(self.show_edge_points)):
+                            # 计算鼠标位置与点的距离
+                            distance_sqr = ((self.io.mouse_pos[0] - self.show_edge_points[i][0]) ** 2 + (self.io.mouse_pos[1] - self.show_edge_points[i][1]) ** 2)
+                            if distance_sqr < 64:
+                                # 拖动点
+                                self.show_edge_points[i][0] = self.io.mouse_pos[0]
+                                self.show_edge_points[i][1] = self.io.mouse_pos[1]
+                                # 计算image_edge_points
+                                self.__calc_image_edge()
+                                break
+
+    # 裁剪图片
+    def __perspective_transform_image(self):
+        if self.image_edge_points is None:
+            return
+        # self.texture.height
+        # reverse y
+        # image edge points to x,y,w,h
+        x = self.image_edge_points[0][0]
+        y = self.image_edge_points[0][1]
+        w = self.image_edge_points[1][0] - self.image_edge_points[0][0]
+        h = self.image_edge_points[2][1] - self.image_edge_points[0][1]
+        self.texture.perspective_transform(x, y, w, h)
+        self.image_edge_points = None
+        self.show_edge_points = None
+
+    def __sort_edge_points(self, points):
+        #逆时针排序
+        if points is None:
+            return None
+        # 计算四边形的中心点
+        center_x = sum(point[0] for point in points) / 4
+        center_y = sum(point[1] for point in points) / 4
+        # 如果 points 是一个 NumPy 数组，将它转换为列表
+        if isinstance(points, np.ndarray):
+            points = points.tolist()    
+        # 按照每个点相对于中心点的角度进行排序
+        points.sort(key=lambda point: math.atan2(point[1] - center_y, point[0] - center_x))
+        return points
 
     # 主循环
     def update(self):
@@ -122,9 +154,11 @@ class UIManager:
                 self.imageWndScale = imgui.Vec2(self.texture.width / self.innerImageWndSize.x, self.texture.height / self.innerImageWndSize.y)
                 # image edge detection
                 edge_points = self.__edge_detection(path, 1)
+                edge_points = self.__sort_edge_points(edge_points)
+
                 if edge_points is not None:
-                    # edge_points copy to self.image_edge_points
-                    self.image_edge_points = edge_points.copy()
+                    # deep copy
+                    self.image_edge_points = [point.copy() for point in edge_points]
                     # add cur imgui window pos
                     offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
                     offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
@@ -141,6 +175,8 @@ class UIManager:
                 else:
                     self.image_edge_points = None
                     self.show_edge_points = None
+                # for i in range(len(self.image_edge_points)):
+                #     print(self.image_edge_points[i])
 
         # 结束imgui窗口
         imgui.end()
@@ -175,16 +211,14 @@ class UIManager:
                 center_y = sum(point[1] for point in points) / 4
 
                 # 将每个点向四边形的外部移动
-                for point in points:
-                    direction_x = point[0] - center_x
-                    direction_y = point[1] - center_y
+                for i in range(len(points)):
+                    direction_x = points[i][0] - center_x
+                    direction_y = points[i][1] - center_y
                     length = (direction_x ** 2 + direction_y ** 2) ** 0.5
                     direction_x /= length
                     direction_y /= length
-                    point[0] += direction_x * expand
-                    point[1] += direction_y * expand
-
-
+                    points[i][0] += direction_x * expand
+                    points[i][1] += direction_y * expand
                 return points
         return None
 
@@ -256,6 +290,10 @@ class UIManager:
                     self.selected_image.pop(idx)
                     self.image_manager.remove_image(name)
                     break
+
+        if imgui.button("透视变换"):
+            if self.selected_image != -1:
+                self.__perspective_transform_image()
 
         # 显示图片列表
         images = list(self.image_manager.get_images().items())
