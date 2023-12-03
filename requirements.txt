@@ -1,3 +1,5 @@
 imgui[pygame]
 numpy
 PyOpenGL-accelerate
+fpdf
+opencv-python
