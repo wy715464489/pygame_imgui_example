@@ -3,6 +3,7 @@ from path_util import PathUtils as pathutil
 import pygame
 import numpy as np
 import cv2
+from enumrate_util import PostProcessEnum as PostProcess
 
 class Texture:
     def __init__(self):
@@ -11,6 +12,7 @@ class Texture:
         self.origin_gl_tex_id = 0
         self.width = 1
         self.height = 1
+        self.cpu_cache_data = None
     
     def delete(self):
         if (self.origin_gl_tex_id != 0):
@@ -22,6 +24,77 @@ class Texture:
                 self.origin_gl_tex_id = 0;
             glDeleteTextures([self.gl_tex_id])
             self.gl_tex_id = 0
+    
+    def brighten(self):
+        img = self.cpu_cache_data
+        img = np.frombuffer(img, dtype=np.uint8)
+        img = img.reshape((self.height, self.width, 4))
+        img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        img = img.astype(np.float32)
+        img = img * 1.2
+        img[img > 255] = 255
+        img = img.astype(np.uint8)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2RGBA)
+        img = img.reshape((self.height, self.width, 4))
+        img = img.astype(np.uint8)
+        img = pygame.image.frombuffer(img.tobytes(), (self.width, self.height), 'RGBA')
+        img = pygame.transform.flip(img, False, True)
+        img = pygame.image.tostring(img, "RGBA", 1)
+        self.cpu_cache_data = img
+        # 重新生成纹理
+        tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        # texture wrapping params
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        # texture filtering params
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height,
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, img)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        self.origin_gl_tex_id = self.gl_tex_id
+        self.gl_tex_id = tex_id
+
+    def enhance_and_sharpen(self):
+        img = self.cpu_cache_data
+        img = np.frombuffer(img, dtype=np.uint8)
+        img = img.reshape((self.height, self.width, 4))
+        img = cv2.cvtColor(img, cv2.COLOR_RGBA2RGB)
+        img = img.astype(np.float32)
+        img = cv2.detailEnhance(img, sigma_s=10, sigma_r=0.15)
+        img = img.astype(np.uint8)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2RGBA)
+        img = img.reshape((self.height, self.width, 4))
+        img = img.astype(np.uint8)
+        img = pygame.image.frombuffer(img.tobytes(), (self.width, self.height), 'RGBA')
+        img = pygame.transform.flip(img, False, True)
+        img = pygame.image.tostring(img, "RGBA", 1)
+        self.cpu_cache_data = img
+        # 重新生成纹理
+        tex_id = glGenTextures(1)
+        glBindTexture(GL_TEXTURE_2D, tex_id)
+        # texture wrapping params
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT)
+        # texture filtering params
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, self.width, self.height,
+                     0, GL_RGBA, GL_UNSIGNED_BYTE, img)
+        glBindTexture(GL_TEXTURE_2D, 0)
+        self.origin_gl_tex_id = self.gl_tex_id
+        self.gl_tex_id = tex_id
+
+    def post_process(self, post_process: PostProcess):
+        if post_process == PostProcess.NoneProcess:
+            pass
+        elif post_process == PostProcess.BRIGHTEN:
+            self.brighten()
+        elif post_process == PostProcess.ENHANCE_AND_SHARPEN:
+            self.enhance_and_sharpen()
 
     # 左下，右下，右上，左上
     def perspective_transform(self, points: list):
@@ -34,9 +107,7 @@ class Texture:
         # 生成透视变换矩阵
         M = cv2.getPerspectiveTransform(pts_src, pts_dst)
         # 透视变换
-        img = pygame.image.load(self.path)
-        img = pygame.transform.flip(img, False, True)
-        img = pygame.image.tostring(img, "RGBA", 1)
+        img = self.cpu_cache_data
         img = np.frombuffer(img, dtype=np.uint8)
         img = img.reshape((self.height, self.width, 4))
         img = cv2.warpPerspective(img, M, (self.width, self.height))
@@ -45,6 +116,7 @@ class Texture:
         img = pygame.image.frombuffer(img.tobytes(), (self.width, self.height), 'RGBA')
         img = pygame.transform.flip(img, False, True)
         img = pygame.image.tostring(img, "RGBA", 1)
+        self.cpu_cache_data = img
         # 重新生成纹理
         tex_id = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, tex_id)
@@ -77,6 +149,7 @@ class Texture:
         #reverse image
         image = pygame.transform.flip(image, False, True)
         image = pygame.image.tostring(image, "RGBA", 1)
+        self.cpu_cache_data = image
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
                      0, GL_RGBA, GL_UNSIGNED_BYTE, image)
         #glGenerateMipmap(GL_TEXTURE_2D)

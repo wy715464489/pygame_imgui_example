@@ -11,6 +11,12 @@ from tkinter import filedialog
 import pygame
 from texture_manager import TextureMgr as texmgr
 import cv2
+from enumrate_util import PostProcessEnum as PostProcess
+from fpdf import FPDF
+import os
+
+
+# 定义后处理枚举
 
 def open_file_dialog(text, file_types):
     root = tk.Tk()
@@ -46,7 +52,10 @@ class UIManager:
         self.innerImageWndSize = imgui.Vec2(self.imageWndSize.x - 20, self.imageWndSize.y - 20)
         # 显示的imgui image windows size 与 原始图片的比例
         self.imageWndScale = imgui.Vec2(1.0,1.0)
-        
+        self.current_post_process = PostProcess.NoneProcess
+
+        # self.post_process_items = ["None", "去除阴影", "亮度增强", "增强锐化", "超清", "上采样", "黑白", "灰度"]
+        self.post_process_items = ["None",  "亮度增强", "增亮锐化"]
 
     def shutdown(self):
         texmgr.get_instance().destroy()
@@ -248,6 +257,36 @@ class UIManager:
             self.image_edge_points[i][0] *= self.imageWndScale.x
             self.image_edge_points[i][1] *= self.imageWndScale.y
 
+    def __combine_to_pdf(self):
+        # 所有的image list 若没生成纹理则生成纹理
+        images = list(self.image_manager.get_images().items())
+        textures = []
+        for idx, (name, path) in enumerate(images):
+            texture = texmgr.get_instance().create_get_texture(path)
+            textures.append(texture)
+        # 生成pdf
+        pdf_path = "combine.pdf"
+        pdf = FPDF()
+        for idx, texture in enumerate(textures):
+            pdf.add_page()
+            # 通过texture 的cpu_cache_data 生成图片
+            image = pygame.image.frombuffer(texture.cpu_cache_data, (texture.width, texture.height), "RGBA")
+            # 保存图片到tmp目录
+            # python 获取tmp目录
+            tmp_dir = os.path.join(os.path.dirname(__file__), "tmp")
+            if not os.path.exists(tmp_dir):
+                os.mkdir(tmp_dir)
+            
+            # add idx
+            image_tmp_path = os.path.join(tmp_dir, "tmp" + str(idx) + ".png")
+            pygame.image.save(image, image_tmp_path)
+            # 添加图片到pdf
+            pdf.image(image_tmp_path, 0, 0, 210, 297)
+        # 保存pdf
+        pdf.output(pdf_path, "F")
+
+
+
     def __show_image(self, texId):
         # set position
         
@@ -261,6 +300,11 @@ class UIManager:
         self.__show_image_edge()
 
         imgui.end()
+
+    def __post_process(self, post_process: PostProcess):
+        if self.texture is None:
+            return
+        self.texture.post_process(post_process)
         
     def __show_image_list(self):
         # 创建一个imgui窗口,设置窗口位置在左边居中，size.y大小为高度的0.7倍
@@ -290,6 +334,26 @@ class UIManager:
         if imgui.button("透视变换"):
             if self.selected_image != -1:
                 self.__perspective_transform_image()
+        #imgui combox box post process
+    
+        textSize = imgui.calc_text_size("增强锐化").x + 24;
+        imgui.set_next_item_width(textSize)
+        idx = self.current_post_process.value
+        with imgui.begin_combo("##后处理", self.post_process_items[idx]) as combo:
+            if combo.opened:
+                for i in range(len(self.post_process_items)):
+                    is_selected = (idx == i)
+                    if imgui.selectable(self.post_process_items[i], is_selected)[0]:
+                        self.current_post_process = PostProcess(i)
+                    if is_selected:
+                        imgui.set_item_default_focus()
+        imgui.same_line()
+        if imgui.button("后处理"):
+            self.__post_process(self.current_post_process)
+
+        if imgui.button("合并为PDF"):
+            self.__combine_to_pdf()
+
 
         # 显示图片列表
         images = list(self.image_manager.get_images().items())
