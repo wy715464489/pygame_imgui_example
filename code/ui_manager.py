@@ -114,11 +114,7 @@ class UIManager:
         # self.texture.height
         # reverse y
         # image edge points to x,y,w,h
-        x = self.image_edge_points[0][0]
-        y = self.image_edge_points[0][1]
-        w = self.image_edge_points[1][0] - self.image_edge_points[0][0]
-        h = self.image_edge_points[2][1] - self.image_edge_points[0][1]
-        self.texture.perspective_transform(x, y, w, h)
+        self.texture.perspective_transform(self.image_edge_points)
         self.image_edge_points = None
         self.show_edge_points = None
 
@@ -156,26 +152,25 @@ class UIManager:
                 # image edge detection
                 edge_points = self.__edge_detection(path, 1)
                 edge_points = self.__sort_edge_points(edge_points)
-
-                if edge_points is not None:
-                    # deep copy
-                    self.image_edge_points = [point.copy() for point in edge_points]
-                    # add cur imgui window pos
-                    offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
-                    offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
-                    for i in range(len(edge_points)):
-                        # scale to image window size
-                        edge_points[i][0] /= self.imageWndScale.x
-                        edge_points[i][1] /= self.imageWndScale.y
-                        edge_points[i][0] += self.imageWndPos.x
-                        edge_points[i][1] += self.imageWndPos.y
-                        # add wnd border
-                        edge_points[i][0] += offsetX
-                        edge_points[i][1] += offsetY
-                    self.show_edge_points = edge_points
-                else:
-                    self.image_edge_points = None
-                    self.show_edge_points = None
+                if edge_points is None:
+                    #逆时针
+                    edge_points = [[0,0],[self.texture.width,0],[self.texture.width,self.texture.height],[0,self.texture.height]]
+                # deep copy
+                self.image_edge_points = [point.copy() for point in edge_points]
+                # add cur imgui window pos
+                offsetX = imgui.get_style().window_border_size + imgui.get_style().window_padding.x
+                offsetY = imgui.get_style().window_border_size + imgui.get_style().window_padding.y
+                for i in range(len(edge_points)):
+                    # scale to image window size
+                    edge_points[i][0] /= self.imageWndScale.x
+                    edge_points[i][1] /= self.imageWndScale.y
+                    edge_points[i][0] += self.imageWndPos.x
+                    edge_points[i][1] += self.imageWndPos.y
+                    # add wnd border
+                    edge_points[i][0] += offsetX
+                    edge_points[i][1] += offsetY
+                self.show_edge_points = edge_points
+                
                 # for i in range(len(self.image_edge_points)):
                 #     print(self.image_edge_points[i])
 
