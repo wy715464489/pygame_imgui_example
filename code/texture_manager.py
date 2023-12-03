@@ -12,13 +12,15 @@ class Texture:
         self.width = 1
         self.height = 1
     
-    def __del__(self):
+    def delete(self):
         if (self.origin_gl_tex_id != 0):
             if (self.origin_gl_tex_id != self.gl_tex_id):
-                glDeleteTextures(self.origin_gl_tex_id)
+                glDeleteTextures([self.origin_gl_tex_id])
                 self.origin_gl_tex_id = 0
         if (self.gl_tex_id != 0):
-            glDeleteTextures(self.gl_tex_id)
+            if (self.origin_gl_tex_id == self.gl_tex_id):
+                self.origin_gl_tex_id = 0;
+            glDeleteTextures([self.gl_tex_id])
             self.gl_tex_id = 0
 
     def perspective_transform(self, x, y, w, h):
@@ -114,10 +116,10 @@ class TextureMgr:
     def remove_texture(self, path):
         if path in self.textures:
             # delete texture
-            del self.textures[path]
+            self.textures[path].delete()
             self.textures.pop(path)
 
     def destroy(self):
         for texture in self.textures.values():
-            del texture
+            texture.delete()
         self.textures.clear()

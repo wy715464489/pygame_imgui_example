@@ -49,6 +49,7 @@ class UIManager:
         
 
     def shutdown(self):
+        texmgr.get_instance().destroy()
         self.renderer.shutdown()
 
     # 处理事件
